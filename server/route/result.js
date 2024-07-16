@@ -6,7 +6,8 @@ const router = require("express").Router()
 
 router.post("/", async (req, res, next) => {
     const { year, month, resultList } = req.body;
-    console.log(year, month, resultList);
+   
+
     function dateToMilliseconds(day, month, year) {
         const dateString = `${year}-${month}-${day}`;
         const date = new Date(dateString);
@@ -18,32 +19,57 @@ router.post("/", async (req, res, next) => {
 
     try {
         if (!resultList || resultList.length === 0) {
-            return createError(400, "Result list is required");
+            return next(createError(400, "Result list is required"));
         }
 
         const requiredKeys = [
             'day', 'delhiLuckyBazar', 'disawer', 'faridabad',
             'gaziyabad', 'kolkataKing', 'gali', 'delhiBazar', 'shreeGanesh'
         ];
-
-        const hasRequiredKeys = requiredKeys.every(key => key in resultList[0]);
+        
+        const firstResultKeys = Object.keys(resultList[0]);
+        
+        const hasRequiredKeys = requiredKeys.some(requiredKey =>
+            firstResultKeys.some(resultKey =>
+                resultKey.includes(requiredKey)
+            )
+        );
+        
         if (!hasRequiredKeys) {
             return next(createError(405, "File does not match with expected headings"));
         }
-        // DateTime
+
+        // Add DateTime to each result
         for (const result of resultList) {
             const { day } = result;
             result.DateTime = dateToMilliseconds(day, month, year);
         }
 
-        const result = await SattaKingRecordChartjs.findOne({ year: year, month: month }).select("_id");
-
-        if (result) {
-            await SattaKingRecordChartjs.findByIdAndUpdate(result._id, { $push: { resultList: { $each: resultList } } });
+        const existingRecord = await SattaKingRecordChartjs.findOne({ year: year, month: month }).exec();
+           
+        if (existingRecord) {
+            for (const newResult of resultList) {
+                const existingDayResult = existingRecord.resultList.find(result => result.day === newResult.day);
+                
+                if (existingDayResult) {
+                    // Update existing day result fields that are not blank in newResult
+                    
+                    Object.keys(newResult).forEach(key => {
+                        if (newResult[key] !== "" && newResult[key]!==null) {
+                          
+                            existingDayResult[key] = newResult[key];
+                        }
+                    });
+                } else {
+                    // Add new result for a new day
+                    existingRecord.resultList.push(newResult);
+                }
+            }
+            await existingRecord.save();
         } else {
+            // No existing record for the year and month, create a new one
             const newRecord = new SattaKingRecordChartjs({ year, month, resultList });
             await newRecord.save();
-            console.log(newRecord);
         }
 
         res.status(200).send("Record updated successfully");
@@ -53,6 +79,7 @@ router.post("/", async (req, res, next) => {
         next(createError(500, "Internal Server Error"));
     }
 });
+
 
 
 router.get("/", async (req, res) => {
@@ -83,7 +110,60 @@ router.get("/", async (req, res) => {
     }
 });
 
+router.get("/fullYear", async (req, res) => {
 
+    const year = req.query.year;
+    
+    try {
+       
+        const chart = await SattaKingRecordChartjs.find({year:year})
+      
+        res.json(chart)
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
+router.get("/currentTDate", async (req, res) => {
+    try {
+        const currentDate = new Date(); // Get the current date
+        const currentMonth = currentDate.getMonth() + 1; // Get the current month (adjusting as getMonth() returns 0-based index)
+        const currentDay = currentDate.getDate(); // Get the current day of the month
+
+        // Find all records for the current month
+        const currentMonthRecords = await SattaKingRecordChartjs.find({ year: '2024', month: currentMonth });
+
+        if (!currentMonthRecords || currentMonthRecords.length === 0) {
+            // If no records found for the current month, return pending
+            res.json({ status: 'pending', message: 'No records found for the current month' });
+            return;
+        }
+
+        let currentDayResult = null;
+
+        // Iterate through each record and find the result for the current day
+        for (const record of currentMonthRecords) {
+            currentDayResult = record.resultList.find(result => result.day === currentDay);
+            if (currentDayResult) {
+                break; // Exit loop if result found for the current day
+            }
+        }
+
+        if (!currentDayResult) {
+            // If no result found for the current day in any record, return pending
+            res.json({ status: 'pending', message: `No result found for day ${currentDay}` });
+        } else {
+            // Return the result for the current day
+            res.json({ status: 'success', result: currentDayResult });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 router.delete("/:id", async (req, res) => {
 
    try {

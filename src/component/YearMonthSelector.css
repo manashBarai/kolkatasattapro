@@ -1,0 +1,10 @@
+.year-month-selector {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .year-month-selector select {
+    padding: 5px;
+    font-size: 16px;
+  }
+  

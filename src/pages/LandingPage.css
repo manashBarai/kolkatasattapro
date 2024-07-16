@@ -1,0 +1,17 @@
+h6,p,h2,h1,h3,li,ul{
+    margin: 0;
+    padding: 0;
+}
+
+.firstSection{
+    background-image: linear-gradient(#0a0b0b, #0f3a40);
+}
+.text-yellow{
+    color: #ff0;
+}
+.secondSection{
+    background: rgb(240, 240, 89);
+}
+.sattaKingSite{
+    background: var(--myTheme-color);
+}
